@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oleg Vyshnyvetsky - Portfolio</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #111; color: #eee; font-family: system-ui, sans-serif; }
+
+  #feed {
+    overscroll-behavior: contain;
+    height: 100dvh;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+  }
+  #feed::-webkit-scrollbar { display: none; }
+
+  .slide {
+    scroll-snap-stop: always;
+    height: 100dvh;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 56px 16px 24px;
+  }
+
+  .player {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: fit-content;
+    max-width: 100%;
+  }
+  .player video {
+    display: block;
+    max-width: 100%;
+    max-height: 72dvh;
+    background: #000;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  /* Timeline */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #aaa;
+    font-variant-numeric: tabular-nums;
+  }
+  .bar {
+    position: relative;
+    flex: 1;
+    height: 28px;
+    cursor: pointer;
+    touch-action: none;
+  }
+  .bar::before, .fill {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    height: 4px;
+    margin-top: -2px;
+    border-radius: 2px;
+  }
+  .bar::before { right: 0; background: #444; }
+  .fill { width: 0; background: #eee; }
+  .thumb {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.1s;
+  }
+  .bar:hover .thumb, .bar.dragging .thumb { transform: scale(1.3); }
+
+  .caption { text-align: center; max-width: 600px; }
+  .caption h2 { font-size: 18px; margin-bottom: 4px; }
+  .caption p { font-size: 14px; color: #aaa; line-height: 1.4; }
+
+  header {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; font-size: 14px; z-index: 10;
+    background: linear-gradient(#111, transparent);
+  }
+  header a { color: #aaa; text-decoration: none; margin-left: 14px; }
+  header a:hover { color: #fff; }
+
+  #nav {
+    position: fixed; right: 16px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 10;
+  }
+  #nav button {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 1px solid #444; background: #1c1c1c; color: #eee;
+    font-size: 16px; cursor: pointer;
+  }
+  #nav button:hover { background: #2a2a2a; }
+  #nav button:disabled { opacity: 0.3; cursor: default; }
+  #counter { font-size: 13px; color: #aaa; }
+
+  @media (max-width: 600px) {
+    #nav { right: 8px; }
+    #nav button { width: 34px; height: 34px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <strong>Oleg Vyshnyvetsky</strong>
+  <nav>
+    <a href="https://github.com/OlegVishnivetsky" target="_blank">GitHub</a>
+    <a href="https://oleg-vishnivetsky.itch.io" target="_blank">itch.io</a>
+    <a href="mailto:olegmroleg@gmail.com">Email</a>
+  </nav>
+</header>
+
+<div id="feed"></div>
+
+<div id="nav">
+  <button id="prev" aria-label="Previous">▲</button>
+  <span id="counter">1 / 1</span>
+  <button id="next" aria-label="Next">▼</button>
+</div>
+
+<script>
+  // video clips
+  const clips = [
+    { video: "videos/1.mp4", title: "Denki Blocks!",           desc: "" },
+    { video: "videos/2.mp4", title: "Sixspin",                 desc: "" },
+    { video: "videos/3.mp4", title: "Avialoon",                desc: "" },
+    { video: "videos/4.mp4", title: "Wordnova: Words Battles", desc: "" },
+    { video: "videos/5.mp4", title: "Axioma: Null",            desc: "" },
+    { video: "videos/6.mp4", title: "DynamicDodge!",           desc: "" },
+  ];
+
+  const feed = document.getElementById("feed");
+  const counter = document.getElementById("counter");
+  const prevBtn = document.getElementById("prev");
+  const nextBtn = document.getElementById("next");
+  let current = 0;
+
+  const fmt = s => {
+    s = Math.floor(s || 0);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
+
+  const players = [];
+
+  clips.forEach((c, i) => {
+    const slide = document.createElement("section");
+    slide.className = "slide";
+    slide.dataset.index = i;
+    slide.innerHTML = `
+      <div class="player">
+        <video muted loop playsinline preload="none" data-src="${c.video}"></video>
+        <div class="controls">
+          <div class="bar"><div class="fill"></div><div class="thumb"></div></div>
+          <span class="time">0:00 / 0:00</span>
+        </div>
+      </div>
+      <div class="caption"><h2>${c.title}</h2><p>${c.desc}</p></div>`;
+    feed.appendChild(slide);
+
+    const p = {
+      v: slide.querySelector("video"),
+      bar: slide.querySelector(".bar"),
+      fill: slide.querySelector(".fill"),
+      thumb: slide.querySelector(".thumb"),
+      time: slide.querySelector(".time"),
+      dragging: false,
+    };
+    players.push(p);
+
+    p.v.addEventListener("click", () => p.v.paused ? p.v.play() : p.v.pause());
+    p.v.addEventListener("loadedmetadata", () => render(p));
+
+    const seekFromPointer = e => {
+      const r = p.bar.getBoundingClientRect();
+      const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      if (p.v.duration) p.v.currentTime = frac * p.v.duration;
+      render(p, frac);
+    };
+    p.bar.addEventListener("pointerdown", e => {
+      p.dragging = true;
+      p.bar.classList.add("dragging");
+      p.bar.setPointerCapture(e.pointerId);
+      seekFromPointer(e);
+    });
+    p.bar.addEventListener("pointermove", e => { if (p.dragging) seekFromPointer(e); });
+    const endDrag = () => { p.dragging = false; p.bar.classList.remove("dragging"); };
+    p.bar.addEventListener("pointerup", endDrag);
+    p.bar.addEventListener("pointercancel", endDrag);
+  });
+
+  function render(p, frac) {
+    const d = p.v.duration || 0;
+    if (frac === undefined) frac = d ? p.v.currentTime / d : 0;
+    p.fill.style.width = frac * 100 + "%";
+    p.thumb.style.left = frac * 100 + "%";
+    p.time.textContent = `${fmt(frac * d)} / ${fmt(d)}`;
+  }
+
+  (function tick() {
+    const p = players[current];
+    if (p && !p.dragging && p.v.duration) render(p);
+    requestAnimationFrame(tick);
+  })();
+
+  const slides = [...feed.children];
+  const videoAt = i => players[i]?.v;
+
+  function load(i) {
+    const v = videoAt(i);
+    if (v && v.dataset.src) { v.src = v.dataset.src; delete v.dataset.src; }
+  }
+
+  function updateUI() {
+    counter.textContent = `${current + 1} / ${slides.length}`;
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === slides.length - 1;
+  }
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      const i = +e.target.dataset.index;
+      const v = videoAt(i);
+      if (e.isIntersecting) {
+        current = i;
+        load(i); load(i + 1); load(i - 1);
+        v.play().catch(() => {});
+        updateUI();
+      } else {
+        v.pause();
+      }
+    });
+  }, { threshold: 0.6 });
+  slides.forEach(s => observer.observe(s));
+
+  function goTo(i) {
+    if (i < 0 || i >= slides.length) return;
+    slides[i].scrollIntoView({ behavior: "smooth" });
+  }
+
+  prevBtn.onclick = () => goTo(current - 1);
+  nextBtn.onclick = () => goTo(current + 1);
+
+  document.addEventListener("keydown", e => {
+    const v = videoAt(current);
+    if (["ArrowDown", "PageDown", "s", "j"].includes(e.key)) { e.preventDefault(); goTo(current + 1); }
+    else if (["ArrowUp", "PageUp", "w", "k"].includes(e.key)) { e.preventDefault(); goTo(current - 1); }
+    else if (e.key === "ArrowRight" && v?.duration) { e.preventDefault(); v.currentTime = Math.min(v.duration, v.currentTime + 5); }
+    else if (e.key === "ArrowLeft" && v?.duration) { e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 5); }
+    else if (e.key === " " && v) { e.preventDefault(); v.paused ? v.play() : v.pause(); }
+  });
+
+  let wheelLock = false;
+  feed.addEventListener("wheel", e => {
+    e.preventDefault();
+    if (wheelLock || Math.abs(e.deltaY) < 10) return;
+    wheelLock = true;
+    goTo(current + (e.deltaY > 0 ? 1 : -1));
+    setTimeout(() => wheelLock = false, 700);
+  }, { passive: false });
+
+  updateUI();
+</script>
+</body>
+</html>
